@@ -134,6 +134,37 @@ pintos_init (void)
     run_actions (argv);
   } else {
     // TODO: no command line passed to kernel. Run interactively 
+    while (1){
+      printf("\nICS143A> ");
+      char input_buffer[64] = {'\0'};
+      char whoami_command[] = "whoami";
+      char exit_command[] = "exit";
+      int i = 0;
+      int input;
+      while ((input = input_getc())){
+        printf("%c", input);
+        if(input == 10){
+          break;
+        }
+        input_buffer[i] = input;
+        i++;
+        if(i > 64){
+          printf("\n");
+          break;
+        }
+      }
+      //printf("input buffer: %s.\n", input_buffer);
+      if(strcmp(whoami_command, input_buffer) == 0){
+        printf("Jeffrey");
+        continue;
+      }
+      else if(strcmp(exit_command, input_buffer) == 0){
+        break;
+      }
+      else{
+        printf("invalid input!");
+      }
+    }
   }
 
   /* Finish up. */
