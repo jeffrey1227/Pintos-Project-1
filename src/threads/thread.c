@@ -206,6 +206,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  if(thread_current()->temp_priority < priority){
+    thread_yield();
+  }
+
   return tid;
 }
 
@@ -243,7 +247,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem, compare_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -313,8 +318,11 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread) {
+    // list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, compare_priority, NULL);
+  }
+    
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -322,45 +330,21 @@ thread_yield (void)
 
 void sleep_to_ready(int64_t tick){
 
-  // struct list_elem *e;
-  // for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
-  // {
-  //   struct thread *t = list_entry (e, struct thread, elem);
-  //   if (t->wakeup_tick >= tick){
-  //     // list_push_back(&ready_list, &t->elem);
-  //     // t->status = THREAD_READY;
-  //     thread_unblock(t);
-  //     list_remove(e);
-  //   }
-  // }
   struct list_elem *e;
   struct list_elem *curr;
   e = list_begin(&sleep_list);
   while (e != list_end(&sleep_list))
   {
     struct thread *t = list_entry(e, struct thread, sleepelem);
-    // printf("checking thread %d in sleep list... remain %lld ticks\n", t->tid, t->wakeup_tick);
-    // curr = e;
-    // e = list_next(e);
+
     if (t->wakeup_tick > 0)
     {
       t->wakeup_tick--;
     }
     if (t->wakeup_tick <= 0)
     {
-      // printf("before unblock: thread %d status: %d\n", t->tid, t->status);
       thread_unblock(t);
-      // printf("after unblock: thread %d status: %d\n", t->tid, t->status);
       e = list_remove(e);
-      // printf("thread %d removed from sleep list, status: %d\n", t->tid, t->status);
-      // printf("print sleep list: ");
-      // struct list_elem *e1;
-      // for (e1 = list_begin (&sleep_list); e1 != list_end (&sleep_list); e1 = list_next (e))
-      // {
-      //   struct thread *t1 = list_entry (e1, struct thread, elem);
-      //   printf("%d ", t1->tid);
-      // }
-      // printf("\n");
     }
     else e = list_next(e);
   }
@@ -388,7 +372,11 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  thread_current ()->temp_priority = new_priority;
+  struct list_elem *e = list_begin(&sleep_list);
+  if(new_priority < list_entry(e, struct thread, elem)->temp_priority){
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -403,6 +391,11 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* Not yet implemented. */
+}
+
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  return (list_entry(a, struct thread, elem)->priority >= list_entry(b, struct thread, elem)->priority);
 }
 
 /* Returns the current thread's nice value. */
@@ -515,6 +508,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t-> temp_priority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
